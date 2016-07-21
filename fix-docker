@@ -1,0 +1,13 @@
+#!/bin/bash
+active_machine=$(docker-machine active)
+
+# fix network
+docker-machine ssh ${active_machine} "sudo udhcpc SIGUSR1 && sudo /etc/init.d/docker restart"
+
+# fix time
+docker-machine ssh ${active_machine} "sudo ntpclient -s -h pool.ntp.org"
+
+# fix nfs
+net_name=$(VBoxManage showvminfo ${active_machine} --machinereadable | grep hostonlyadapter | cut -d'"' -f2)
+bridge_ip=$(VBoxManage list hostonlyifs | grep "${net_name}" -A 3 | grep IPAddress | cut -d ':' -f2 | xargs)
+docker-machine ssh ${active_machine} "sudo umount /Users; sudo rm -rf /Users; sudo mkdir /Users && sudo /usr/local/etc/init.d/nfs-client start && sudo mount -t nfs -o noacl,async ${bridge_ip}:/Users /Users"
