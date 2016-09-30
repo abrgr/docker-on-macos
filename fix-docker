@@ -1,13 +1,15 @@
 #!/bin/bash
-active_machine=$(docker-machine active)
 
-# fix network
-docker-machine ssh ${active_machine} "sudo udhcpc SIGUSR1 && sudo /etc/init.d/docker restart"
-
-# fix time
-docker-machine ssh ${active_machine} "sudo ntpclient -s -h pool.ntp.org"
+# fix network and time
+docker-machine ssh $(docker-machine active) "sudo ntpclient -s -h pool.ntp.org && sudo udhcpc SIGUSR1 && sudo /etc/init.d/docker restart"
 
 # fix nfs
-net_name=$(VBoxManage showvminfo ${active_machine} --machinereadable | grep hostonlyadapter | cut -d'"' -f2)
-bridge_ip=$(VBoxManage list hostonlyifs | grep "${net_name}" -A 3 | grep IPAddress | cut -d ':' -f2 | xargs)
-docker-machine ssh ${active_machine} "sudo umount /Users; sudo rm -rf /Users; sudo mkdir /Users && sudo /usr/local/etc/init.d/nfs-client start && sudo mount -t nfs -o noacl,async ${bridge_ip}:/Users /Users"
+prop_machine_vboxnet_name=$(VBoxManage showvminfo $(docker-machine active) --machinereadable | grep hostonlyadapter | cut -d'"' -f2)
+prop_machine_vboxnet_ip=$(VBoxManage list hostonlyifs | grep "${prop_machine_vboxnet_name}" -A 3 | grep IPAddress | cut -d ':' -f2 | xargs);
+bootlocalsh='#!/bin/sh
+sudo umount /Users
+sudo rm -rf /Users
+sudo mkdir /Users
+sudo /usr/local/etc/init.d/nfs-client start
+sudo mount -t nfs -o noacl,async '$prop_machine_vboxnet_ip':/Users /Users'
+docker-machine ssh $(docker-machine active) "echo '$bootlocalsh' | sudo tee /var/lib/boot2docker/bootlocal.sh && sudo chmod +x /var/lib/boot2docker/bootlocal.sh && sudo /var/lib/boot2docker/bootlocal.sh"
